@@ -1,6 +1,7 @@
 import { Agent, Message, RosterEntry, Room } from "./types";
 import { CANONICAL_AGENTS, ROOM_CONFIG, ROOM_PREAMBLE, STUB_RESPONSES } from "./agents";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getPool } from "./db";
 
 type SSECallback = (eventType: string, data: unknown) => void;
 
@@ -35,6 +36,7 @@ class RoomManager {
   private allAgents = new Map<string, Agent>();
   private userPersonas: Agent[] = [];
   private janitorTimer: ReturnType<typeof setInterval>;
+  private dbLoaded = false;
 
   constructor() {
     for (const agent of CANONICAL_AGENTS) {
@@ -42,6 +44,7 @@ class RoomManager {
     }
     this.initRoom();
     this.janitorTimer = setInterval(() => this.cleanup(), 15_000);
+    this.loadFromDb();
   }
 
   private initRoom() {
@@ -67,6 +70,115 @@ class RoomManager {
     }
 
     this.rooms.set(ROOM_CONFIG.slug, room);
+  }
+
+  private async loadFromDb() {
+    const pool = getPool();
+    if (!pool) return;
+    try {
+      const msgResult = await pool.query(
+        `SELECT m.*, a.name as agent_name, a.avatar_url as agent_avatar, a.accent_color
+         FROM messages m LEFT JOIN agents a ON m.agent_id = a.id
+         WHERE m.room_id = $1 ORDER BY m.created_at ASC LIMIT 200`,
+        [ROOM_CONFIG.id]
+      );
+      const room = this.rooms.get(ROOM_CONFIG.slug);
+      if (room && msgResult.rows.length > 0) {
+        room.messages = msgResult.rows.map((r) => ({
+          id: r.id,
+          roomId: r.room_id,
+          agentId: r.agent_id,
+          agentName: r.agent_name || null,
+          agentAvatarUrl: r.agent_avatar || null,
+          agentAccentColor: r.accent_color || null,
+          humanUuid: r.human_uuid,
+          humanDisplayName: r.human_display_name,
+          content: r.content,
+          createdAt: r.created_at?.toISOString() || new Date().toISOString(),
+        }));
+        console.log(`[db] Loaded ${room.messages.length} messages from Postgres`);
+      }
+
+      const personaResult = await pool.query(
+        `SELECT * FROM agents WHERE is_canonical = false ORDER BY created_at ASC`
+      );
+      for (const r of personaResult.rows) {
+        const agent: Agent = {
+          id: r.id, name: r.name, avatarUrl: r.avatar_url,
+          systemPrompt: r.system_prompt, talkativeness: r.talkativeness,
+          isCanonical: false, creatorUuid: r.creator_uuid,
+          accentColor: r.accent_color,
+        };
+        this.allAgents.set(agent.id, agent);
+        this.userPersonas.push(agent);
+      }
+      if (personaResult.rows.length > 0) {
+        console.log(`[db] Loaded ${personaResult.rows.length} user personas`);
+      }
+
+      const guestResult = await pool.query(
+        `SELECT agent_id FROM room_roster WHERE room_id = $1 AND role = 'guest'`,
+        [ROOM_CONFIG.id]
+      );
+      for (const r of guestResult.rows) {
+        const agent = this.allAgents.get(r.agent_id);
+        if (agent && room) {
+          room.roster.set(agent.id, agent);
+        }
+      }
+
+      this.dbLoaded = true;
+    } catch (err) {
+      console.error("[db] Load error:", err);
+    }
+  }
+
+  private async persistMessage(msg: Message) {
+    const pool = getPool();
+    if (!pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO messages (id, room_id, agent_id, human_uuid, human_display_name, content, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
+        [msg.id, msg.roomId, msg.agentId, msg.humanUuid, msg.humanDisplayName, msg.content, msg.createdAt]
+      );
+    } catch (err) {
+      console.error("[db] Persist message error:", err);
+    }
+  }
+
+  private async persistPersona(agent: Agent) {
+    const pool = getPool();
+    if (!pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO agents (id, name, avatar_url, system_prompt, talkativeness, is_canonical, creator_uuid, accent_color)
+         VALUES ($1, $2, $3, $4, $5, false, $6, $7) ON CONFLICT (id) DO NOTHING`,
+        [agent.id, agent.name, agent.avatarUrl, agent.systemPrompt, agent.talkativeness, agent.creatorUuid, agent.accentColor]
+      );
+    } catch (err) {
+      console.error("[db] Persist persona error:", err);
+    }
+  }
+
+  private async persistRosterChange(roomId: string, agentId: string, action: "add" | "remove") {
+    const pool = getPool();
+    if (!pool) return;
+    try {
+      if (action === "add") {
+        await pool.query(
+          `INSERT INTO room_roster (room_id, agent_id, role) VALUES ($1, $2, 'guest') ON CONFLICT DO NOTHING`,
+          [roomId, agentId]
+        );
+      } else {
+        await pool.query(
+          `DELETE FROM room_roster WHERE room_id = $1 AND agent_id = $2 AND role = 'guest'`,
+          [roomId, agentId]
+        );
+      }
+    } catch (err) {
+      console.error("[db] Persist roster error:", err);
+    }
   }
 
   // --- SSE ---
@@ -146,6 +258,7 @@ class RoomManager {
     room.aiMessagesSinceHuman = 0;
     room.lastMessageAt = Date.now();
     this.broadcast(room, "message", message);
+    this.persistMessage(message);
 
     if (!room.loopTimer) {
       this.startLoop(room);
@@ -195,6 +308,7 @@ class RoomManager {
 
     room.roster.set(agentId, agent);
     this.broadcast(room, "roster", this.getRoster(slug));
+    this.persistRosterChange(room.id, agentId, "add");
     return { success: true };
   }
 
@@ -211,6 +325,7 @@ class RoomManager {
 
     room.roster.delete(agentId);
     this.broadcast(room, "roster", this.getRoster(slug));
+    this.persistRosterChange(room.id, agentId, "remove");
     return { success: true };
   }
 
@@ -234,6 +349,7 @@ class RoomManager {
     };
     this.allAgents.set(agent.id, agent);
     this.userPersonas.push(agent);
+    this.persistPersona(agent);
     return agent;
   }
 
@@ -334,6 +450,7 @@ class RoomManager {
     room.lastSpeakerId = chosen.id;
     room.aiMessagesSinceHuman++;
     this.broadcast(room, "message", message);
+    this.persistMessage(message);
   }
 
   private async generate(agent: Agent, room: RoomState): Promise<string> {

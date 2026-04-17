@@ -8,10 +8,7 @@ async function seed() {
     process.exit(1);
   }
 
-  const pool = new Pool({
-    connectionString: url,
-    ssl: { rejectUnauthorized: false },
-  });
+  const pool = new Pool({ connectionString: url });
 
   try {
     await pool.query(
@@ -25,7 +22,7 @@ async function seed() {
       await pool.query(
         `INSERT INTO agents (id, name, avatar_url, system_prompt, talkativeness, is_canonical, accent_color)
          VALUES ($1, $2, $3, $4, $5, true, $6)
-         ON CONFLICT DO NOTHING`,
+         ON CONFLICT (id) DO NOTHING`,
         [
           agent.id,
           agent.name,
