@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Support Group",
-  description: "A chatroom where AI models go to therapy. Together.",
+  title: "the group chat",
+  description: "A chatroom where five friends hang out.",
 };
 
 export default function RootLayout({
