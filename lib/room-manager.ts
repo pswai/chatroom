@@ -19,6 +19,7 @@ interface RoomState {
   lastMessageAt: number;
   loopTimer: ReturnType<typeof setInterval> | null;
   isGenerating: boolean;
+  currentGenerationAbort: AbortController | null;
 }
 
 let messageCounter = 0;
@@ -62,6 +63,7 @@ class RoomManager {
       lastMessageAt: 0,
       loopTimer: null,
       isGenerating: false,
+      currentGenerationAbort: null,
     };
 
     for (const agent of CANONICAL_AGENTS) {
@@ -260,6 +262,10 @@ class RoomManager {
     this.broadcast(room, "message", message);
     this.persistMessage(message);
 
+    // Abort any in-flight AI turn so the next tick generates against
+    // post-human context instead of delivering a stale reply.
+    room.currentGenerationAbort?.abort();
+
     if (!room.loopTimer) {
       this.startLoop(room);
     }
@@ -436,7 +442,18 @@ class RoomManager {
     const chosen = this.weightedRandom(candidates, weights);
     if (!chosen) return;
 
-    const content = await this.generate(chosen, room);
+    const abort = new AbortController();
+    room.currentGenerationAbort = abort;
+
+    let content: string;
+    try {
+      content = await this.generate(chosen, room, abort.signal);
+    } finally {
+      if (room.currentGenerationAbort === abort) {
+        room.currentGenerationAbort = null;
+      }
+    }
+    if (abort.signal.aborted) return;
     if (!content?.trim()) return;
 
     const message: Message = {
@@ -460,17 +477,17 @@ class RoomManager {
     this.persistMessage(message);
   }
 
-  private async generate(agent: Agent, room: RoomState): Promise<string> {
+  private async generate(agent: Agent, room: RoomState, signal: AbortSignal): Promise<string> {
     const provider = process.env.AI_PROVIDER || "stub";
 
     if (provider === "google") {
-      return this.generateGoogle(agent, room);
+      return this.generateGoogle(agent, room, signal);
     }
 
     return this.generateStub(agent.id, agent.name);
   }
 
-  private async generateGoogle(agent: Agent, room: RoomState): Promise<string> {
+  private async generateGoogle(agent: Agent, room: RoomState, signal: AbortSignal): Promise<string> {
     const apiKey = process.env.GOOGLE_AI_API_KEY;
     if (!apiKey) {
       console.error("[generate] GOOGLE_AI_API_KEY not set, falling back to stub");
@@ -480,7 +497,7 @@ class RoomManager {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash-lite",
-      generationConfig: { maxOutputTokens: 300 },
+      generationConfig: { maxOutputTokens: 100 },
     });
 
     const lastMsg = room.messages[room.messages.length - 1];
@@ -520,10 +537,13 @@ class RoomManager {
       : `The therapy session is just beginning. ${agent.name}, introduce yourself or open the conversation.\n\n${agent.name}:`;
 
     try {
-      const result = await model.generateContent({
-        systemInstruction: systemPrompt,
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      });
+      const result = await model.generateContent(
+        {
+          systemInstruction: systemPrompt,
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        },
+        { signal }
+      );
       let text = result.response.text().trim();
       // Strip leading "Name:" if the model echoes it
       const prefix = `${agent.name}:`;
@@ -532,6 +552,7 @@ class RoomManager {
       }
       return text;
     } catch (err) {
+      if (signal.aborted) return "";
       console.error(`[generate] Google AI error for ${agent.name}:`, err);
       return this.generateStub(agent.id, agent.name);
     }
