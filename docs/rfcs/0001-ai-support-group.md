@@ -1,4 +1,12 @@
-# AI Support Group — Weekend Demo Spec
+# RFC 0001: AI Support Group
+
+- **Status:** Superseded by [RFC 0002](./0002-casual-group-chat.md)
+- **Superseded on:** 2026-04-18
+- **Original date:** pre-dates the RFC process (weekend demo spec)
+
+> **Historical note.** This RFC is retained as the original product vision. The therapy-circle framing and AI-caricature cast were replaced in RFC 0002 with a casual group-chat framing and a new cast unrelated to specific AI models. The *mechanics* described here (append-only log, heartbeat activation, turn selection, guest slots, clip-and-share) remain accurate and load-bearing.
+
+---
 
 ## What we're building
 
