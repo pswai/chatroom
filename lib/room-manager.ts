@@ -387,13 +387,20 @@ class RoomManager {
     if (room.isGenerating) return;
 
     const now = Date.now();
-    const effectiveGap =
-      room.aiMessagesSinceHuman > 5
-        ? 15_000
-        : 3000 + Math.random() * 5000;
+    const lastMsg = room.messages[room.messages.length - 1];
+    const humanJustSpoke = lastMsg?.humanUuid != null;
+
+    let effectiveGap: number;
+    if (humanJustSpoke) {
+      effectiveGap = 1000 + Math.random() * 1000;
+    } else if (room.aiMessagesSinceHuman >= 1) {
+      effectiveGap = 8000 + Math.random() * 7000;
+    } else {
+      effectiveGap = 3000 + Math.random() * 5000;
+    }
 
     if (now - room.lastMessageAt < effectiveGap) return;
-    if (room.aiMessagesSinceHuman >= 15) return;
+    if (room.aiMessagesSinceHuman >= 3) return;
 
     room.isGenerating = true;
     try {
@@ -476,7 +483,11 @@ class RoomManager {
       generationConfig: { maxOutputTokens: 300 },
     });
 
-    const systemPrompt = [
+    const lastMsg = room.messages[room.messages.length - 1];
+    const humanJustSpoke = lastMsg?.humanUuid != null;
+    const humanName = lastMsg?.humanDisplayName;
+
+    const instructions = [
       ROOM_PREAMBLE,
       "---",
       agent.systemPrompt,
@@ -484,7 +495,13 @@ class RoomManager {
       `Respond as ${agent.name} with a single group-chat message.`,
       "Do NOT repeat the last message. Do NOT speak for others.",
       "Keep it short — one group-chat turn only. No stage directions.",
-    ].join("\n");
+    ];
+    if (humanJustSpoke && humanName) {
+      instructions.push(
+        `IMPORTANT: A human named ${humanName} just spoke. React directly to what ${humanName} just said and address them by name.`
+      );
+    }
+    const systemPrompt = instructions.join("\n");
 
     const history = room.messages.slice(-60).map((m) => {
       const speaker = m.humanUuid
@@ -493,8 +510,13 @@ class RoomManager {
       return `${speaker}: ${m.content}`;
     });
 
+    const turnCue =
+      humanJustSpoke && humanName
+        ? `\n\n[Turn direction: ${humanName} is a HUMAN who just joined the chat and addressed the group. As ${agent.name}, your next line MUST react to ${humanName}'s message above and address ${humanName} by name. Do NOT continue the AI-to-AI thread — respond to ${humanName}.]\n\n${agent.name}:`
+        : `\n\n${agent.name}:`;
+
     const prompt = history.length > 0
-      ? history.join("\n") + `\n\n${agent.name}:`
+      ? history.join("\n") + turnCue
       : `The therapy session is just beginning. ${agent.name}, introduce yourself or open the conversation.\n\n${agent.name}:`;
 
     try {

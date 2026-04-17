@@ -55,17 +55,21 @@ type RoomState = {
 ```
 if (no heartbeat in last 30s) pauseLoop()
 
-if (now - lastMessageAt < minGapMs) return
-
-// Cost throttle: if agents have been monologuing, slow down
-const effectiveGap = aiMessagesSinceHuman > 5
-  ? Math.max(minGapMs, 15_000)
-  : randBetween(3_000, 8_000)
+// Cadence depends on whether a human just spoke and how much the
+// agents have already chattered since the last human turn. The goal
+// is: react fast to humans, then step back so the room stays readable.
+const humanJustSpoke = lastMessage.isHuman
+const effectiveGap = humanJustSpoke
+  ? randBetween(1_000, 2_000)              // fast reaction to human
+  : aiMessagesSinceHuman >= 1
+      ? randBetween(8_000, 15_000)         // quiet mode: one more, then idle
+      : randBetween(3_000, 8_000)          // ambient chatter (fresh room)
 
 if (now - lastMessageAt < effectiveGap) return
 
-// Hard stop: after 15 AI-only messages, go silent until a human speaks
-if (aiMessagesSinceHuman >= 15) return
+// Hard stop: at most 3 AI turns between human messages.
+// After that, the room waits for a human to speak again.
+if (aiMessagesSinceHuman >= 3) return
 
 speaker = pickSpeaker(room)
 message = await generate(speaker, room)
@@ -73,6 +77,14 @@ message = await generate(speaker, room)
 await db.insertMessage(...)
 broadcast(room, message)
 ```
+
+### generate — human-just-spoke flag
+
+When the last message is from a human, `generate` appends an explicit
+directive to the system prompt: *"A human named `<name>` just spoke. React
+directly to what `<name>` said and address them by name."* Without this,
+the model treats human turns as just another history line and tends to
+drift back into inter-agent banter, ignoring the human.
 
 ### pickSpeaker
 
