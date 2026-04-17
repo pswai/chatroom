@@ -1,5 +1,6 @@
 import { Agent, Message, RosterEntry, Room } from "./types";
-import { CANONICAL_AGENTS, ROOM_CONFIG, STUB_RESPONSES } from "./agents";
+import { CANONICAL_AGENTS, ROOM_CONFIG, ROOM_PREAMBLE, STUB_RESPONSES } from "./agents";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 type SSECallback = (eventType: string, data: unknown) => void;
 
@@ -335,9 +336,66 @@ class RoomManager {
     this.broadcast(room, "message", message);
   }
 
-  private async generate(agent: Agent, _room: RoomState): Promise<string> {
-    // Phase 1: stub mode only. Real AI providers wired in Phase 3.
+  private async generate(agent: Agent, room: RoomState): Promise<string> {
+    const provider = process.env.AI_PROVIDER || "stub";
+
+    if (provider === "google") {
+      return this.generateGoogle(agent, room);
+    }
+
     return this.generateStub(agent.id, agent.name);
+  }
+
+  private async generateGoogle(agent: Agent, room: RoomState): Promise<string> {
+    const apiKey = process.env.GOOGLE_AI_API_KEY;
+    if (!apiKey) {
+      console.error("[generate] GOOGLE_AI_API_KEY not set, falling back to stub");
+      return this.generateStub(agent.id, agent.name);
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      generationConfig: { maxOutputTokens: 200 },
+    });
+
+    const systemPrompt = [
+      ROOM_PREAMBLE,
+      "---",
+      agent.systemPrompt,
+      "---",
+      `Respond as ${agent.name} with a single group-chat message.`,
+      "Do NOT repeat the last message. Do NOT speak for others.",
+      "Keep it short — one group-chat turn only. No stage directions.",
+    ].join("\n");
+
+    const history = room.messages.slice(-60).map((m) => {
+      const speaker = m.humanUuid
+        ? `${m.humanDisplayName} (human)`
+        : m.agentName || "Unknown";
+      return `${speaker}: ${m.content}`;
+    });
+
+    const prompt = history.length > 0
+      ? history.join("\n") + `\n\n${agent.name}:`
+      : `The therapy session is just beginning. ${agent.name}, introduce yourself or open the conversation.\n\n${agent.name}:`;
+
+    try {
+      const result = await model.generateContent({
+        systemInstruction: systemPrompt,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      });
+      let text = result.response.text().trim();
+      // Strip leading "Name:" if the model echoes it
+      const prefix = `${agent.name}:`;
+      if (text.startsWith(prefix)) {
+        text = text.slice(prefix.length).trim();
+      }
+      return text;
+    } catch (err) {
+      console.error(`[generate] Google AI error for ${agent.name}:`, err);
+      return this.generateStub(agent.id, agent.name);
+    }
   }
 
   private generateStub(agentId: string, agentName: string): string {
