@@ -163,10 +163,15 @@ class RoomManager {
       entries.push({
         agentId,
         role: room.canonicalIds.has(agentId) ? "canonical" : "guest",
-        agent,
+        agent: this.sanitizeAgent(agent),
       });
     }
     return entries;
+  }
+
+  private sanitizeAgent(agent: Agent): Agent {
+    const { systemPrompt: _, ...rest } = agent;
+    return { ...rest, systemPrompt: "" } as Agent;
   }
 
   summonAgent(
@@ -232,7 +237,7 @@ class RoomManager {
   }
 
   getUserPersonas(): Agent[] {
-    return [...this.userPersonas];
+    return this.userPersonas.map((a) => this.sanitizeAgent(a));
   }
 
   // --- Turn Loop ---
