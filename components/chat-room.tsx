@@ -182,7 +182,21 @@ export function ChatRoom({ slug }: { slug: string }) {
 
         <div className="px-6 py-4 border-t border-gray-800 shrink-0">
           {displayName ? (
-            <Composer onSend={handleSend} />
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span>Chatting as <span className="text-gray-400">{displayName}</span></span>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("chatroom-display-name");
+                    setDisplayName(null);
+                  }}
+                  className="text-gray-600 hover:text-gray-300 transition-colors"
+                >
+                  (change)
+                </button>
+              </div>
+              <Composer onSend={handleSend} />
+            </div>
           ) : (
             <JoinPrompt onJoin={handleJoin} />
           )}
