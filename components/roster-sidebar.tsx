@@ -59,7 +59,7 @@ export function RosterSidebar({
             type="button"
             onClick={onClose}
             aria-label="Close roster"
-            className="md:hidden w-8 h-8 -mr-2 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg"
+            className="md:hidden w-11 h-11 -mr-2 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg"
           >
             ×
           </button>
@@ -242,7 +242,7 @@ function PersonaCreator({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 -mr-2 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg"
+            className="w-11 h-11 md:w-8 md:h-8 -mr-2 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg"
           >
             ×
           </button>
@@ -330,7 +330,7 @@ function PersonaBrowser({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 -mr-2 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg"
+            className="w-11 h-11 md:w-8 md:h-8 -mr-2 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg"
           >
             ×
           </button>
