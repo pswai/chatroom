@@ -22,13 +22,13 @@ export function Composer({ onSend }: { onSend: (content: string) => void }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Say something..."
-        className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500 text-sm"
+        className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 md:py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500 text-base md:text-sm"
         autoFocus
       />
       <button
         type="submit"
         disabled={!value.trim()}
-        className="px-5 py-2.5 bg-white text-gray-900 rounded-lg font-medium text-sm hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="px-5 py-3 md:py-2.5 bg-white text-gray-900 rounded-lg font-medium text-sm hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         Send
       </button>

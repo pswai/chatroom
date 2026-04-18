@@ -32,6 +32,7 @@ export function ChatRoom({ slug }: { slug: string }) {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [roomTitle, setRoomTitle] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const sessionId = useRef("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -145,11 +146,11 @@ export function ChatRoom({ slug }: { slug: string }) {
   );
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100">
+    <div className="flex h-dvh bg-gray-950 text-gray-100">
       <div className="flex flex-col flex-1 min-w-0">
-        <header className="flex items-center justify-between px-6 py-3 border-b border-gray-800 shrink-0">
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">
+        <header className="flex items-center justify-between gap-3 px-4 md:px-6 py-3 border-b border-gray-800 shrink-0">
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold tracking-tight truncate">
               {roomTitle || "Loading..."}
             </h1>
             <p className="text-xs text-gray-600">
@@ -158,17 +159,40 @@ export function ChatRoom({ slug }: { slug: string }) {
                 : "Connecting..."}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2 h-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`}
-            />
-            <span className="text-xs text-gray-600">
-              {connected ? "Live" : "Offline"}
-            </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`}
+              />
+              <span className="text-xs text-gray-600">
+                {connected ? "Live" : "Offline"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open roster"
+              className="md:hidden w-11 h-11 -mr-2 flex items-center justify-center text-gray-400 hover:text-gray-200"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M3 5h14M3 10h14M3 15h14"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-0.5">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-0.5">
           {messages.length === 0 && connected && (
             <p className="text-sm text-gray-600 text-center py-12">
               The session is about to begin...
@@ -180,7 +204,7 @@ export function ChatRoom({ slug }: { slug: string }) {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-800 shrink-0">
+        <div className="px-4 md:px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-gray-800 shrink-0">
           {displayName ? (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -209,6 +233,8 @@ export function ChatRoom({ slug }: { slug: string }) {
         onSummon={handleSummon}
         onKick={handleKick}
         sessionId={sessionId.current}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
     </div>
   );
@@ -229,14 +255,14 @@ function JoinPrompt({ onJoin }: { onJoin: (name: string) => void }) {
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Enter your name to join the conversation..."
-        className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500 text-sm"
+        placeholder="Enter your name to join..."
+        className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 md:py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500 text-base md:text-sm"
         autoFocus
       />
       <button
         type="submit"
         disabled={!name.trim()}
-        className="px-5 py-2.5 bg-white text-gray-900 rounded-lg font-medium text-sm hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="px-5 py-3 md:py-2.5 bg-white text-gray-900 rounded-lg font-medium text-sm hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         Join
       </button>
