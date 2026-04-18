@@ -82,6 +82,26 @@ This RFC is a prerequisite for a later RFC that backs each character with its co
 - **Loss of comedic premise.** RFC 0001's framing carried real comedic energy (*"AI models in therapy"* is a shareable hook). Casual group chat is flatter as a pitch. Counter-argument: the premise only worked if the voices landed, and in practice they read as stiff; a lively group chat with sharp characters ships virality through moments, not premise. If this trades weaker pitch for stronger execution, it's the right trade for a *demo* where the artifact (clip PNG) is the share vehicle.
 - **Docs staleness.** `DESIGN.md:1,338` and `db/schema.sql:1` still carry the "AI Support Group" name in comments. These are cosmetic and deliberately left as follow-up; no functional impact.
 
+## Mobile support (amendment, 2026-04-18)
+
+RFC 0001 listed "Mobile polish (target desktop)" as a non-goal. That line is now stale. The room is meant to be read on a phone as much as a laptop — the share vehicle is a clip PNG passed around in chats, and the people clicking through will mostly land in mobile Safari or mobile Chrome. A desktop-only layout leaves the drawer, the summon flow, and the persona creator unreachable for those users. That's a functional gap, not polish.
+
+**In scope:**
+- Layout responds below 768px. Main chat column fills the viewport; the right-hand roster aside collapses into a slide-in drawer triggered by a header hamburger.
+- Composer, join prompt, and persona-creator inputs render at 16px on mobile (prevents iOS auto-zoom on focus). Primary action buttons hit a 44×44 minimum touch target.
+- Viewport height uses `dvh` so Safari's retracting chrome doesn't truncate the composer. `viewport-fit: cover` + `env(safe-area-inset-bottom)` padding on the composer and bottom-sheet modals so the home indicator is cleared.
+- Persona-creator and summon modals reflow as bottom sheets (rounded-top, flush to viewport bottom) below 768px.
+- Hover-dependent affordances (kick × on guest rows) are always visible on touch.
+
+**Out of scope:**
+- Native apps (iOS/Android wrappers). The browser experience is the product.
+- Offline mode or PWA install prompts.
+- Landscape-specific layouts below 768px. Portrait is the expected orientation.
+- Tablet-specific treatment between 768–1024px. Desktop layout is used there; this is acceptable because the aside fits.
+- Touch-drag gestures (swipe-to-close the drawer). Tap-backdrop is sufficient.
+
+**Signal of failure:** inputs auto-zoom on iPhone Safari; drawer gets stuck open after resizing across the breakpoint; composer hidden behind the home indicator. All verified clear at time of merge.
+
 ## Implementation status
 
 - [x] `lib/agents.ts` rewritten (`ROOM_CONFIG`, `ROOM_PREAMBLE`, `CANONICAL_AGENTS`, `STUB_RESPONSES`)
@@ -89,6 +109,7 @@ This RFC is a prerequisite for a later RFC that backs each character with its co
 - [x] `app/layout.tsx` metadata updated
 - [x] `app/room/[slug]/page.tsx` redirects unknown slugs to `/`
 - [x] Type check clean (`npx tsc --noEmit`)
+- [x] Mobile adaptation shipped (see "Mobile support" amendment above)
 - [ ] Dev-server smoke test (in progress at time of writing)
 - [ ] Re-run `npm run seed` against Neon to insert new room + agents
 - [ ] Update `DESIGN.md` (follow-up)
